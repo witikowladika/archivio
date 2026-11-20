@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Archivio Skizze</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: eine Arbeitsfläche mit Reitern (Original, Entzerrt, Zeichnung), darunter einklappbare Regler. Look wie der Linktree: Command OS, nur dunkel, Gold für Aktion und Fokus. */
+:root {
+  --bg: #050505;
+  --panel: #0b0b0b;
+  --panel-2: #121212;
+  --rule: rgba(237, 233, 224, 0.10);
+  --rule-gold: rgba(217, 168, 46, 0.38);
+  --ink-1: #ede9e0;
+  --ink-2: #c9c7c2;
+  --ink-3: #8a8781;
+  --gold: #d9a82e;
+  --gold-hi: #f0c75e;
+  --champagne: #e7d18a;
+  --wash: rgba(217, 168, 46, 0.07);
+  --paper: #fbf8f1;
+  --display: "Cormorant Garamond", "Times New Roman", serif;
+  --ui: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; background: var(--bg); color: var(--ink-2);
+  font-family: var(--ui); font-size: 15px; line-height: 1.5;
+  padding-block: max(28px, env(safe-area-inset-top, 0px)) max(48px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }
+h1 { font-family: var(--display); font-weight: 600; color: var(--champagne); font-size: clamp(38px, 9vw, 58px); line-height: 1.02; margin: 8px 0 8px; text-wrap: balance; }
+.lead { margin: 0; max-width: 58ch; color: var(--ink-2); }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button, .btn {
+  font: inherit; font-weight: 500; color: var(--ink-1); background: var(--panel-2);
+  border: 1px solid rgba(237, 233, 224, 0.18); border-radius: 4px; padding: 10px 14px; cursor: pointer;
+  min-height: 44px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+}
+button:hover, .btn:hover { border-color: var(--rule-gold); background: var(--wash); }
+button:focus-visible, .btn:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+button.primary, .btn.primary { background: var(--gold); color: #1a1405; border-color: var(--gold); }
+button.primary:hover, .btn.primary:hover { background: var(--gold-hi); }
+button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold-hi); background: var(--wash); }
+button:disabled { opacity: 0.45; cursor: default; }
+select { font: inherit; color: var(--ink-1); background: var(--panel-2); border: 1px solid rgba(237,233,224,0.18); border-radius: 4px; padding: 10px 10px; min-height: 44px; }
+.status { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em; color: var(--ink-3); min-height: 1.4em; }
+.status b { color: var(--gold); font-weight: 500; }
+
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule-gold); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 16px; color: var(--ink-3); }
+.tabs button[aria-selected="true"] { color: var(--gold-hi); border-bottom-color: var(--gold); }
+.tabs .sp { flex: 1; }
+.zoom { display: flex; gap: 4px; }
+.zoom button { padding: 6px 12px; min-height: 38px; }
+
+.stage { position: relative; background: #000; border: 1px solid var(--rule); max-height: 74vh; overflow: auto; -webkit-overflow-scrolling: touch; }
+.cv { position: relative; width: 100%; line-height: 0; }
+.cv canvas { display: block; width: 100%; height: auto; }
+.cv svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cv.placing { cursor: crosshair; outline: 2px solid var(--gold); outline-offset: -2px; }
+.hint { font-size: 13.5px; color: var(--ink-3); margin: 0; }
+
+details { border: 1px solid var(--rule); background: var(--panel); border-radius: 4px; }
+summary { cursor: pointer; padding: 12px 14px; font-family: var(--display); font-weight: 600; font-size: 22px; color: var(--ink-1); list-style: none; display: flex; justify-content: space-between; align-items: baseline; min-height: 44px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; font-family: var(--mono); font-size: 15px; color: var(--gold); }
+details[open] summary::after { content: "–"; }
+details[open] summary { border-bottom: 1px solid var(--rule); }
+.ctl { padding: 14px; display: grid; gap: 16px; }
+.row { display: grid; gap: 6px; }
+.row label { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--ink-2); }
+.row output { font-family: var(--mono); font-size: 12px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.row small { color: var(--ink-3); font-size: 12.5px; }
+input[type=range] { width: 100%; accent-color: var(--gold); min-height: 32px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 40px; padding: 6px 12px; font-size: 14px; }
+.out { display: grid; gap: 10px; }
+.out img { max-width: 100%; border: 1px solid var(--rule); background: var(--paper); }
+.out textarea { width: 100%; min-height: 110px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); background: var(--panel-2); border: 1px solid var(--rule); border-radius: 4px; padding: 8px; }
+footer { font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 14px; }
+.toast { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--rule-gold); color: var(--ink-1); padding: 10px 16px; border-radius: 4px; font-size: 14px; max-width: calc(100% - 32px); z-index: 5; }
+.toast[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Archivio · Prototyp</div>
+    <h1>Archivio Skizze</h1>
+    <p class="lead">Foto einer Fassade laden, senkrecht entzerren, Wappen oder Skulpturen antippen und als Strichzeichnung ausgeben. Alles läuft auf deinem Gerät, nichts wird hochgeladen.</p>
+  </header>
+
+  <div class="bar">
+    <label class="btn primary" for="file">Foto wählen</label>
+    <input id="file" type="file" accept="image/*" hidden>
+    <label class="eyebrow" for="res" style="margin-left:4px">Auflösung</label>
+    <select id="res" aria-label="Auflösung">
+      <option value="1200">Schnell 1200</option>
+      <option value="1500" selected>Standard 1500</option>
+      <option value="1900">Fein 1900</option>
+    </select>
+    <button id="sampleBtn" type="button">Beispiel laden</button>
+  </div>
+  <div class="status" id="status" role="status" aria-live="polite">Bereit.</div>
+
+  <section aria-label="Arbeitsfläche">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-orig" aria-selected="false" data-view="orig">Original</button>
+      <button role="tab" id="tab-rect" aria-selected="false" data-view="rect">Entzerrt</button>
+      <button role="tab" id="tab-art" aria-selected="true" data-view="art">Zeichnung</button>
+      <span class="sp"></span>
+      <div class="zoom">
+        <button type="button" id="zout" aria-label="Verkleinern">−</button>
+        <button type="button" id="zin" aria-label="Vergrößern">+</button>
+      </div>
+    </div>
+    <div class="stage" id="stage">
+      <div class="cv" id="cv"><canvas id="view" width="760" height="1350"></canvas><svg id="ov" viewBox="0 0 760 1350" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+    </div>
+  </section>
+  <p class="hint" id="hint">Tipp: Unter „Objekte“ ein Wappen oder eine Skulptur markieren, dort wird die Zeichnung feiner und bekommt Schraffur.</p>
+
+  <details id="d-rect">
+    <summary>Entzerren</summary>
+    <div class="ctl">
+      <div class="bar"><button type="button" id="auto">Senkrechte automatisch finden</button></div>
+      <div class="row"><label for="sa">Neigung der Senkrechten <output id="sa-o"></output></label><input id="sa" type="range" min="-0.2" max="0.2" step="0.002" value="0"></div>
+      <div class="row"><label for="sc">Perspektive von unten <output id="sc-o"></output></label><input id="sc" type="range" min="-0.7" max="0.7" step="0.005" value="0"><small>Bei Aufnahmen von unten wird der obere Teil breiter gezogen.</small></div>
+    </div>
+  </details>
+
+  <details id="d-art" open>
+    <summary>Zeichnung</summary>
+    <div class="ctl">
+      <div class="row"><label for="se">Linienmenge <output id="se-o"></output></label><input id="se" type="range" min="0.05" max="0.9" step="0.05" value="0.7"><small>Nach rechts mehr Linien an der Fassade.</small></div>
+      <div class="row"><label for="sd">Feinheit <output id="sd-o"></output></label><input id="sd" type="range" min="0" max="1" step="0.1" value="0.8"><small>Nach rechts feinere, mehr Details (braucht ein paar Sekunden).</small></div>
+      <div class="row"><label for="sl">Linienstärke <output id="sl-o"></output></label><input id="sl" type="range" min="0.5" max="3" step="0.25" value="1"></div>
+      <div class="row"><label for="ss">Putz glätten <output id="ss-o"></output></label><input id="ss" type="range" min="0" max="3" step="1" value="2"></div>
+      <div class="row"><label for="sf">Boden ausblenden <output id="sf-o"></output></label><input id="sf" type="range" min="0" max="30" step="1" value="10"></div>
+    </div>
+  </details>
+
+  <details id="d-obj" open>
+    <summary>Objekte</summary>
+    <div class="ctl">
+      <div class="bar">
+        <button type="button" id="place" aria-pressed="false">Objekt markieren</button>
+        <button type="button" id="rm">Entfernen</button>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="row"><label for="sr">Größe des Bereichs <output id="sr-o"></output></label><input id="sr" type="range" min="0.05" max="0.5" step="0.005" value="0.17"></div>
+      <div class="row"><label for="so">Detailgrad der Skulptur <output id="so-o"></output></label><input id="so" type="range" min="0.1" max="0.8" step="0.05" value="0.65"><small>Nach rechts mehr feine Linien.</small></div>
+      <div class="row"><label for="sh">Schraffur in dunklen Stellen <output id="sh-o"></output></label><input id="sh" type="range" min="0" max="100" step="5" value="10"></div>
+    </div>
+  </details>
+
+  <details id="d-exp">
+    <summary>Ausgabe</summary>
+    <div class="ctl out">
+      <div class="bar">
+        <button type="button" id="mkpng" class="primary">Bild erzeugen</button>
+        <button type="button" id="mksvg">SVG erzeugen</button>
+      </div>
+      <div id="outbox"></div>
+      <p class="hint">Das Bild lässt sich durch langes Drücken sichern. Die SVG erscheint als Text zum Kopieren und läuft beliebig skaliert.</p>
+    </div>
+  </details>
+
+  <footer>Prototyp · Entzerrung nur senkrecht · Zeichnung wird nicht gespeichert · Scans von 3D-Objekten folgen</footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const SAMPLE = null;
+
+/* ---------- Bildoperationen ---------- */
+function boxBlur1(src, dst, w, h, r, horiz) {
+  const n = horiz ? w : h, m = horiz ? h : w, st = horiz ? 1 : w, ln = horiz ? w : 1;
+  const inv = 1 / (2 * r + 1);
+  for (let j = 0; j < m; j++) {
+    const base = j * ln;
+    let s = 0;
+    for (let i = -r; i <= r; i++) { const k = i < 0 ? 0 : i >= n ? n - 1 : i; s += src[base + k * st]; }
+    for (let i = 0; i < n; i++) {
+      dst[base + i * st] = s * inv;
+      const a = i + r + 1, b = i - r;
+      s += src[base + (a >= n ? n - 1 : a) * st] - src[base + (b < 0 ? 0 : b) * st];
+    }
+  }
+}
+function blur(src, w, h, sigma) {
+  if (sigma < 0.05) return Float32Array.from(src);
+  if (sigma > 6) {
+    const r = Math.max(1, Math.round((Math.sqrt(4 * sigma * sigma + 1) - 1) / 2));
+    let a = Float32Array.from(src), b = new Float32Array(w * h);
+    for (let p = 0; p < 3; p++) { boxBlur1(a, b, w, h, r, true); boxBlur1(b, a, w, h, r, false); }
+    return a;
+  }
+  const r = Math.max(1, Math.ceil(sigma * 3)), k = new Float32Array(2 * r + 1);
+  let t = 0;
+  for (let i = -r; i <= r; i++) { const v = Math.exp(-(i * i) / (2 * sigma * sigma)); k[i + r] = v; t += v; }
+  for (let i = 0; i < k.length; i++) k[i] /= t;
+  const tmp = new Float32Array(w * h), out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let i = -r; i <= r; i++) { let xx = x + i; xx = xx < 0 ? 0 : xx >= w ? w - 1 : xx; s += src[row + xx] * k[i + r]; }
+      tmp[row + x] = s;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let i = -r; i <= r; i++) { let yy = y + i; yy = yy < 0 ? 0 : yy >= h ? h - 1 : yy; s += tmp[yy * w + x] * k[i + r]; }
+      out[y * w + x] = s;
+    }
+  }
+  return out;
+}
+function bilateral(src, w, h, rad, sigS, sigR) {
+  const out = new Float32Array(w * h), size = 2 * rad + 1, sw = new Float32Array(size * size);
+  for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) sw[(dy + rad) * size + dx + rad] = Math.exp(-(dx * dx + dy * dy) / (2 * sigS * sigS));
+  const lut = new Float32Array(512);
+  for (let i = 0; i < 512; i++) { const d = i / 511; lut[i] = Math.exp(-(d * d) / (2 * sigR * sigR)); }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = src[y * w + x];
+      let s = 0, ws = 0;
+      for (let dy = -rad; dy <= rad; dy++) {
+        let yy = y + dy; yy = yy < 0 ? 0 : yy >= h ? h - 1 : yy;
+        for (let dx = -rad; dx <= rad; dx++) {
+          let xx = x + dx; xx = xx < 0 ? 0 : xx >= w ? w - 1 : xx;
+          const v = src[yy * w + xx];
+          const d = v > c ? v - c : c - v;
+          const wt = sw[(dy + rad) * size + dx + rad] * lut[(d * 511) | 0];
+          s += v * wt; ws += wt;
+        }
+      }
+      out[y * w + x] = s / ws;
+    }
+  }
+  return out;
+}
+function localNorm(g, w, h, sigma) {
+  const m = blur(g, w, h, sigma), d2 = new Float32Array(w * h), d = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i++) { const v = g[i] - m[i]; d[i] = v; d2[i] = v * v; }
+  const sd = blur(d2, w, h, sigma), out = new Float32Array(w * h);
+  for (let i = 0; i < out.length; i++) { const v = 0.5 + 0.2 * d[i] / (Math.sqrt(sd[i]) + 0.035); out[i] = v < 0 ? 0 : v > 1 ? 1 : v; }
+  return out;
+}
+function sobel(g, w, h) {
+  const gx = new Float32Array(w * h), gy = new Float32Array(w * h);
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x;
+    gx[i] = (g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1]) - (g[i - w - 1] + 2 * g[i - 1] + g[i + w - 1]);
+    gy[i] = (g[i + w - 1] + 2 * g[i + w] + g[i + w + 1]) - (g[i - w - 1] + 2 * g[i - w] + g[i - w + 1]);
+  }
+  return [gx, gy];
+}
+function bil(a, w, h, x, y) {
+  x = x < 0 ? 0 : x > w - 1.001 ? w - 1.001 : x; y = y < 0 ? 0 : y > h - 1.001 ? h - 1.001 : y;
+  const x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0, i = y0 * w + x0;
+  return (a[i] * (1 - fx) + a[i + 1] * fx) * (1 - fy) + (a[i + w] * (1 - fx) + a[i + w + 1] * fx) * fy;
+}
+function gaussTaps(sigma, R) {
+  const k = new Float32Array(2 * R + 1); let s = 0;
+  for (let i = -R; i <= R; i++) { const v = Math.exp(-(i * i) / (2 * sigma * sigma)); k[i + R] = v; s += v; }
+  for (let i = 0; i < k.length; i++) k[i] /= s;
+  return k;
+}
+/* Gerichtete Linienfindung: Kantenrichtung aus dem Strukturtensor, Differenz-der-Gauß quer zur Kante,
+   Glättung entlang der Kante, Kohärenzgewicht (Putz und Rauschen haben keine Richtung), dünne Kämme.
+   Ergebnis: Linienstärke an dunklen Linien, 0 sonst. */
+function flowLines(g, w, h, o) {
+  const n = w * h, sig2 = o.sig * 1.6, R = Math.ceil(3 * sig2);
+  const [gx, gy] = sobel(blur(g, w, h, o.preSig), w, h);
+  const j11 = new Float32Array(n), j12 = new Float32Array(n), j22 = new Float32Array(n);
+  for (let i = 0; i < n; i++) { j11[i] = gx[i] * gx[i]; j12[i] = gx[i] * gy[i]; j22[i] = gy[i] * gy[i]; }
+  const b11 = blur(j11, w, h, o.tsig), b12 = blur(j12, w, h, o.tsig), b22 = blur(j22, w, h, o.tsig);
+  const nx = new Float32Array(n), ny = new Float32Array(n), coh = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = b11[i] - b22[i], b = 2 * b12[i], th = 0.5 * Math.atan2(b, a), tr = b11[i] + b22[i];
+    nx[i] = Math.cos(th); ny[i] = Math.sin(th); coh[i] = tr > 1e-9 ? Math.sqrt(a * a + b * b) / tr : 0;
+  }
+  const k1 = gaussTaps(o.sig, R), k2 = gaussTaps(sig2, R), d = new Float32Array(n);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x, cx = nx[i], cy = ny[i];
+    let s1 = 0, s2 = 0;
+    for (let t = -R; t <= R; t++) { const v = bil(g, w, h, x + cx * t, y + cy * t); s1 += v * k1[t + R]; s2 += v * k2[t + R]; }
+    d[i] = (1 + o.p) * s1 - o.p * s2;
+  }
+  const L = Math.max(1, Math.ceil(2.5 * o.lsig)), kl = gaussTaps(o.lsig, L), st = new Float32Array(n);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x, tx = -ny[i], ty = nx[i];
+    let s = 0;
+    for (let u = -L; u <= L; u++) s += bil(d, w, h, x + tx * u, y + ty * u) * kl[u + L];
+    let cw = (coh[i] - o.c0) / (o.c1 - o.c0); cw = cw < 0 ? 0 : cw > 1 ? 1 : cw; cw = cw * cw * (3 - 2 * cw);
+    st[i] = s < 0 ? -s * cw : 0;
+  }
+  const out = new Float32Array(n);
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x, s = st[i];
+    if (s <= 0) continue;
+    if (s >= bil(st, w, h, x + nx[i], y + ny[i]) && s >= bil(st, w, h, x - nx[i], y - ny[i])) out[i] = s;
+  }
+  return out;
+}
+/* Schwelle, über der der Anteil frac aller Kandidaten (>0, in der Region) liegt */
+function quantile(a, region, frac) {
+  let mx = 0, n = 0;
+  for (let i = 0; i < a.length; i++) if (a[i] > 0 && (!region || region[i])) { n++; if (a[i] > mx) mx = a[i]; }
+  if (!n) return Infinity;
+  const H = new Uint32Array(1024);
+  for (let i = 0; i < a.length; i++) if (a[i] > 0 && (!region || region[i])) H[Math.min(1023, (a[i] / mx * 1023) | 0)]++;
+  let acc = 0; const target = n * frac;
+  for (let b = 1023; b >= 0; b--) { acc += H[b]; if (acc >= target) return b / 1023 * mx; }
+  return 0;
+}
+/* Nachverfolgung: starke Linien behalten, schwache nur wenn sie daran hängen */
+function hyst(a, w, h, thi, tlo, region) {
+  const bin = new Uint8Array(w * h), q = new Int32Array(w * h);
+  let head = 0, tail = 0;
+  for (let i = 0; i < bin.length; i++) if (a[i] >= thi && (!region || region[i])) { bin[i] = 1; q[tail++] = i; }
+  while (head < tail) {
+    const i = q[head++], y = (i / w) | 0, x = i - y * w;
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = y + dy; if (yy < 0 || yy >= h) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx; if (xx < 0 || xx >= w) continue;
+        const j = yy * w + xx;
+        if (!bin[j] && a[j] >= tlo && a[j] > 0 && (!region || region[j])) { bin[j] = 1; q[tail++] = j; }
+      }
+    }
+  }
+  return bin;
+}
+/* Kleine Fragmente entfernen */
+function cleanBin(bin, w, h, minArea, minLen) {
+  const q = new Int32Array(w * h), seen = new Uint8Array(w * h);
+  for (let s = 0; s < bin.length; s++) {
+    if (!bin[s] || seen[s]) continue;
+    let head = 0, tail = 0, x0 = w, x1 = 0, y0 = h, y1 = 0;
+    q[tail++] = s; seen[s] = 1;
+    while (head < tail) {
+      const i = q[head++], y = (i / w) | 0, x = i - y * w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy; if (yy < 0 || yy >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx; if (xx < 0 || xx >= w) continue;
+          const j = yy * w + xx;
+          if (bin[j] && !seen[j]) { seen[j] = 1; q[tail++] = j; }
+        }
+      }
+    }
+    if (tail < minArea && Math.max(x1 - x0, y1 - y0) < minLen) for (let t = 0; t < tail; t++) bin[q[t]] = 0;
+  }
+  return bin;
+}
+function dilate(bin, w, h, r) {
+  if (r <= 0) return bin;
+  const t = new Uint8Array(w * h), o = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let v = 0; const x0 = Math.max(0, x - r), x1 = Math.min(w - 1, x + r);
+    for (let xx = x0; xx <= x1; xx++) if (bin[y * w + xx]) { v = 1; break; }
+    t[y * w + x] = v;
+  }
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(h - 1, y + r);
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      for (let yy = y0; yy <= y1; yy++) if (t[yy * w + x]) { v = 1; break; }
+      o[y * w + x] = v;
+    }
+  }
+  return o;
+}
+
+/* ---------- Entzerrung ---------- */
+/* Vorwärts: x_s = x - a*y, w = 1 - c*y, u = x_s/w, v = y/w (zentrierte Koordinaten). */
+function makeRect(sw, sh, a, cn, lim) {
+  const c = cn / sh, cx = sw / 2, cy = sh / 2;
+  const fwd = (x, y) => { x -= cx; y -= cy; const w = 1 - c * y; return [(x - a * y) / w, y / w]; };
+  const pts = [[0, 0], [sw, 0], [sw, sh], [0, sh]].map(p => fwd(p[0], p[1]));
+  const minx = Math.min(...pts.map(p => p[0])), maxx = Math.max(...pts.map(p => p[0]));
+  const miny = Math.min(...pts.map(p => p[1])), maxy = Math.max(...pts.map(p => p[1]));
+  let sc = sw / (maxx - minx);
+  let ow = Math.round((maxx - minx) * sc), oh = Math.round((maxy - miny) * sc);
+  if (Math.max(ow, oh) > lim) { const k = lim / Math.max(ow, oh); sc *= k; ow = Math.round(ow * k); oh = Math.round(oh * k); }
+  return {
+    ow, oh,
+    fwd: (x, y) => { const p = fwd(x, y); return [(p[0] - minx) * sc, (p[1] - miny) * sc]; },
+    inv: (uo, vo) => { const u = uo / sc + minx, v = vo / sc + miny, den = 1 + c * v; return [(u + a * v) / den + cx, v / den + cy]; }
+  };
+}
+function warp(srcData, sw, sh, R) {
+  const out = new ImageData(R.ow, R.oh), valid = new Uint8Array(R.ow * R.oh), d = srcData.data, o = out.data;
+  for (let y = 0; y < R.oh; y++) {
+    for (let x = 0; x < R.ow; x++) {
+      const p = R.inv(x, y), sx = p[0], sy = p[1], i = (y * R.ow + x) * 4;
+      if (sx < 3 || sy < 3 || sx > sw - 4 || sy > sh - 4) { o[i] = 251; o[i + 1] = 248; o[i + 2] = 241; o[i + 3] = 255; continue; }
+      const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0, j = (y0 * sw + x0) * 4, jj = j + sw * 4;
+      for (let k = 0; k < 3; k++) {
+        o[i + k] = (d[j + k] * (1 - fx) + d[j + 4 + k] * fx) * (1 - fy) + (d[jj + k] * (1 - fx) + d[jj + 4 + k] * fx) * fy;
+      }
+      o[i + 3] = 255; valid[y * R.ow + x] = 1;
+    }
+  }
+  return { img: out, valid };
+}
+/* Senkrechte finden: Neigung a und Perspektive cn suchen, bei denen die senkrechten Kanten am stärksten auf gleiche Spalten fallen. */
+function estimateVertical(photoCanvas) {
+  const sw = photoCanvas.width, sh = photoCanvas.height, w = 260, h = Math.round(260 * sh / sw);
+  const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+  const cx = cvs.getContext('2d'); cx.drawImage(photoCanvas, 0, 0, w, h);
+  const id = cx.getImageData(0, 0, w, h).data, g = new Float32Array(w * h);
+  for (let i = 0; i < g.length; i++) g[i] = (0.299 * id[i * 4] + 0.587 * id[i * 4 + 1] + 0.114 * id[i * 4 + 2]) / 255;
+  const gb = blur(g, w, h, 1.2), E = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 1; x < w - 1; x++) E[y * w + x] = Math.abs(gb[y * w + x + 1] - gb[y * w + x - 1]);
+  const colSum = new Float32Array(w), colCnt = new Float32Array(w);
+  function score(a, cn) {
+    colSum.fill(0); colCnt.fill(0);
+    const c = cn / h;
+    for (let v = 0; v < h; v++) {
+      const vy = v - h / 2, den = 1 + c * vy, sy = vy / den + h / 2;
+      if (sy < 2 || sy > h - 3) continue;
+      const y0 = sy | 0, fy = sy - y0;
+      for (let u = 0; u < w; u++) {
+        const sx = (u - w / 2 + a * vy) / den + w / 2;
+        if (sx < 2 || sx > w - 3) continue;
+        const x0 = sx | 0, fx = sx - x0, j = y0 * w + x0;
+        colSum[u] += (E[j] * (1 - fx) + E[j + 1] * fx) * (1 - fy) + (E[j + w] * (1 - fx) + E[j + w + 1] * fx) * fy;
+        colCnt[u]++;
+      }
+    }
+    let s = 0, n = 0;
+    for (let u = 0; u < w; u++) if (colCnt[u] > 0) { s += colSum[u] * colSum[u] / colCnt[u]; n += colCnt[u]; }
+    return s / Math.max(1, n) * (1 - 0.12 * Math.abs(cn) / 0.7);
+  }
+  let best = { a: 0, cn: 0, s: score(0, 0) }, ra = 0.2, rc = 0.7, n = 9;
+  for (let stage = 0; stage < 3; stage++) {
+    const ca = best.a, cc = best.cn;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const a = ca + ra * (2 * i / (n - 1) - 1), cn = cc + rc * (2 * j / (n - 1) - 1);
+      if (Math.abs(a) > 0.2 || Math.abs(cn) > 0.7) continue;
+      const s = score(a, cn);
+      if (s > best.s) best = { a, cn, s };
+    }
+    ra /= 4; rc /= 4;
+  }
+  return { a: best.a, cn: best.cn };
+}
+
+/* ---------- Vektorisierung: Marching Squares, Konturen verbinden, vereinfachen ---------- */
+function contours(f, w, h, thr) {
+  const wh = w * h, first = new Int32Array(2 * wh).fill(-1), second = new Int32Array(2 * wh).fill(-1);
+  const sa = [], sb = [];
+  function add(e1, e2) {
+    const s = sa.length; sa.push(e1); sb.push(e2);
+    if (first[e1] < 0) first[e1] = s; else second[e1] = s;
+    if (first[e2] < 0) first[e2] = s; else second[e2] = s;
+  }
+  for (let y = 0; y < h - 1; y++) {
+    for (let x = 0; x < w - 1; x++) {
+      const i = y * w + x, fa = f[i], fb = f[i + 1], fc = f[i + w + 1], fd = f[i + w];
+      const idx = (fa > thr ? 8 : 0) | (fb > thr ? 4 : 0) | (fc > thr ? 2 : 0) | (fd > thr ? 1 : 0);
+      if (idx === 0 || idx === 15) continue;
+      const T = i, B = i + w, L = wh + i, R = wh + i + 1;
+      switch (idx) {
+        case 1: case 14: add(L, B); break;
+        case 2: case 13: add(B, R); break;
+        case 3: case 12: add(L, R); break;
+        case 4: case 11: add(T, R); break;
+        case 6: case 9: add(T, B); break;
+        case 7: case 8: add(T, L); break;
+        case 5: if ((fa + fb + fc + fd) / 4 > thr) { add(T, L); add(B, R); } else { add(T, R); add(L, B); } break;
+        case 10: if ((fa + fb + fc + fd) / 4 > thr) { add(T, R); add(L, B); } else { add(T, L); add(B, R); } break;
+      }
+    }
+  }
+  const pt = e => {
+    if (e < wh) { const y = (e / w) | 0, x = e - y * w, a = f[e], b = f[e + 1]; return [x + (thr - a) / (b - a), y]; }
+    e -= wh; const y = (e / w) | 0, x = e - y * w, a = f[e], b = f[e + w]; return [x, y + (thr - a) / (b - a)];
+  };
+  const used = new Uint8Array(sa.length), loops = [];
+  for (let s0 = 0; s0 < sa.length; s0++) {
+    if (used[s0]) continue;
+    used[s0] = 1;
+    const poly = [pt(sa[s0])];
+    let cur = sb[s0], cs = s0;
+    for (;;) {
+      poly.push(pt(cur));
+      let nx = first[cur] === cs ? second[cur] : first[cur];
+      if (nx < 0 || used[nx]) break;
+      used[nx] = 1;
+      cur = sa[nx] === cur ? sb[nx] : sa[nx]; cs = nx;
+    }
+    loops.push(poly);
+  }
+  return loops;
+}
+function simplify(pts, eps) {
+  const n = pts.length;
+  if (n < 6) return pts;
+  const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+  const st = [[0, n - 1]];
+  while (st.length) {
+    const [s, e] = st.pop();
+    const ax = pts[s][0], ay = pts[s][1], bx = pts[e][0], by = pts[e][1], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    let dm = 0, im = -1;
+    for (let i = s + 1; i < e; i++) {
+      const px = pts[i][0] - ax, py = pts[i][1] - ay;
+      let d;
+      if (l2 === 0) d = Math.hypot(px, py); else { let t = (px * dx + py * dy) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; d = Math.hypot(px - t * dx, py - t * dy); }
+      if (d > dm) { dm = d; im = i; }
+    }
+    if (dm > eps) { keep[im] = 1; st.push([s, im], [im, e]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+/* ---------- Zustand und Pipeline ---------- */
+const S = { photo: null, pd: null, W: 0, H: 0, a: 0, cn: 0, R: null, rectCv: null, valid: null, grayR: null,
+  arch: null, obj: null, field: null, objects: [], sel: -1, placing: false, view: 'art', zoom: 1, busy: false, queued: null };
+const view = $('view'), vctx = view.getContext('2d'), ov = $('ov');
+const tick = () => new Promise(r => setTimeout(r, 12));
+function status(t, strong) { $('status').innerHTML = strong ? '<b>' + t + '</b>' : t; }
+let toastT = 0;
+function toast(t) { const e = $('toast'); e.textContent = t; e.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => e.hidden = true, 3200); }
+const fx = () => Math.max(0.5, S.R.ow / 1450);   /* Maßstab gegenüber der Referenzbreite 1450 px */
+
+function loadSource(src) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error('Das Bild konnte nicht gelesen werden.'));
+    im.src = src;
+  });
+}
+async function setPhoto(im) {
+  const lim = +$('res').value, k = Math.min(1, lim / Math.max(im.naturalWidth, im.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  S.photo = c; S.W = c.width; S.H = c.height;
+  S.pd = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  S.objects = []; S.sel = -1; S.placing = false;
+  status('Suche Senkrechte …', true); await tick();
+  const est = estimateVertical(c);
+  S.a = est.a; S.cn = est.cn;
+  syncSliders();
+  await runAll();
+}
+function rectStage() {
+  S.R = makeRect(S.W, S.H, S.a, S.cn, +$('res').value * 1.1);
+  const wr = warp(S.pd, S.W, S.H, S.R);
+  S.valid = wr.valid;
+  const inval = new Uint8Array(S.valid.length);
+  for (let i = 0; i < inval.length; i++) inval[i] = S.valid[i] ? 0 : 1;
+  const dil = dilate(inval, S.R.ow, S.R.oh, 7);
+  S.validE = new Uint8Array(inval.length);
+  for (let i = 0; i < inval.length; i++) S.validE[i] = dil[i] ? 0 : 1;
+  S.tone = null;
+  const c = document.createElement('canvas'); c.width = S.R.ow; c.height = S.R.oh;
+  c.getContext('2d').putImageData(wr.img, 0, 0);
+  S.rectCv = c;
+  const g = new Float32Array(S.R.ow * S.R.oh), d = wr.img.data;
+  for (let i = 0; i < g.length; i++) g[i] = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255;
+  S.grayR = g;
+}
+async function archStage() {
+  const w = S.R.ow, h = S.R.oh, f = fx(), passes = +$('ss').value;
+  status('Fassade: Kontrast und Putz glätten …', true); await tick();
+  const norm = localNorm(S.grayR, w, h, 14 * f);
+  S.normR = norm;
+  let sm = norm;
+  for (let p = 0; p < Math.max(0, passes - (+$('sd').value > 0.5 ? 1 : 0)); p++) { sm = bilateral(sm, w, h, 3, 3, 0.12); await tick(); }
+  status('Fassade: Linien finden …', true); await tick();
+  const fi = +$('sd').value;  /* Feinheit 0..1 */
+  const st = flowLines(sm, w, h, { sig: Math.max(0.8, (1.3 - 0.6 * fi) * f), p: 22, preSig: Math.max(0.6, (1.0 - 0.4 * fi) * f), tsig: (3.0 - 1.6 * fi) * f, lsig: Math.max(1.5, (3.2 - 1.6 * fi) * f), c0: 0.18 - 0.14 * fi, c1: 0.55 - 0.25 * fi });
+  for (let i = 0; i < st.length; i++) if (!S.validE[i]) st[i] = 0;
+  S.archStr = st;
+  archBinary();
+}
+function archBinary() {
+  const w = S.R.ow, h = S.R.oh, f = fx(), q = +$('se').value, r = Math.round(+$('sl').value * f);
+  const thi = quantile(S.archStr, null, q), tlo = thi * (0.4 - 0.15 * (+$('sd').value));
+  const b = hyst(S.archStr, w, h, thi, tlo, null);
+  const fi = +$('sd').value;
+  cleanBin(b, w, h, (22 - 14 * fi) * f, (18 - 10 * fi) * f);
+  S.archR = dilate(b, w, h, r);
+}
+async function objStage() {
+  const w = S.R.ow, h = S.R.oh, f = fx();
+  status('Objekte: feine Linien …', true); await tick();
+  const sm = bilateral(S.normR, w, h, 2, 2, 0.1);
+  const st = flowLines(sm, w, h, { sig: Math.max(0.9, 1.0 * f), p: 20, preSig: Math.max(0.7, 0.8 * f), tsig: Math.max(1.5, 2.0 * f), lsig: Math.max(1.5, 1.8 * f), c0: 0.05, c1: 0.3 });
+  for (let i = 0; i < st.length; i++) if (!S.validE[i]) st[i] = 0;
+  S.objStr = st;
+}
+function makeHatch(region, mk, w, h, f, strength) {
+  const out = new Uint8Array(w * h);
+  if (strength <= 0) return out;
+  if (!S.tone) S.tone = blur(S.grayR, w, h, 1.5 * f);
+  const tone = S.tone, vals = [];
+  for (let i = 0; i < region.length; i += 5) if (region[i]) vals.push(tone[i]);
+  if (vals.length < 50) return out;
+  vals.sort((a, b) => a - b);
+  const lo = vals[(vals.length * 0.05) | 0], hi = vals[(vals.length * 0.95) | 0], span = Math.max(0.02, hi - lo);
+  const s = strength / 100, t1 = 0.12 + 0.38 * s, t2 = 0.05 + 0.2 * s, per = Math.max(4, Math.round(5 * f));
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x;
+    if (!region[i] || mk[i] < 0.35) continue;
+    const tn = (tone[i] - lo) / span;
+    if (tn < t1 && (x + y) % per === 0) out[i] = 1;
+    if (tn < t2 && (((x - y) % per) + per) % per === 0) out[i] = 1;
+  }
+  return out;
+}
+function compose() {
+  const w = S.R.ow, h = S.R.oh, f = fx();
+  const mask = new Float32Array(w * h);
+  for (const o of S.objects) {
+    const c = S.R.fwd(o.sx, o.sy), rx = o.r * w, ry = rx * 1.25;
+    const x0 = Math.max(0, Math.floor(c[0] - rx)), x1 = Math.min(w - 1, Math.ceil(c[0] + rx));
+    const y0 = Math.max(0, Math.floor(c[1] - ry)), y1 = Math.min(h - 1, Math.ceil(c[1] + ry));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const dx = (x - c[0]) / rx, dy = (y - c[1]) / ry;
+      if (dx * dx + dy * dy <= 1) mask[y * w + x] = 1;
+    }
+  }
+  const fa = blur(Float32Array.from(S.archR), w, h, 0.8 * f);
+  let field = fa;
+  if (S.objects.length && S.objStr) {
+    const mk = blur(mask, w, h, 0.017 * w), region = new Uint8Array(w * h);
+    for (let i = 0; i < region.length; i++) region[i] = (mk[i] > 0.04 && S.valid[i]) ? 1 : 0;
+    const thi = quantile(S.objStr, region, +$('so').value);
+    const ridge = hyst(S.objStr, w, h, thi, thi * 0.4, region);
+    cleanBin(ridge, w, h, 10 * f, 9 * f);
+    const hatch = makeHatch(region, mk, w, h, f, +$('sh').value);
+    const lay = new Float32Array(w * h);
+    for (let i = 0; i < lay.length; i++) lay[i] = (ridge[i] || hatch[i]) ? 1 : 0;
+    const fo = blur(lay, w, h, Math.max(0.6, 0.7 * f));
+    field = new Float32Array(w * h);
+    for (let i = 0; i < field.length; i++) { const v = fo[i] * 2.4; field[i] = fa[i] * (1 - mk[i]) + (v > 1 ? 1 : v) * mk[i]; }
+  }
+  const fadeFrom = Math.round(h * (1 - (+$('sf').value) / 100)), fadeLen = Math.max(1, h - fadeFrom);
+  for (let y = 0; y < h; y++) {
+    const fd = y < fadeFrom ? 1 : 1 - (y - fadeFrom) / fadeLen;
+    for (let x = 0; x < w; x++) { const i = y * w + x; field[i] = S.valid[i] ? field[i] * fd : 0; }
+  }
+  S.field = field;
+  renderArt();
+}
+function renderArt() {
+  const w = S.R.ow, h = S.R.oh, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const cx = c.getContext('2d'), id = cx.createImageData(w, h), d = id.data, F = S.field;
+  for (let i = 0; i < F.length; i++) {
+    let t = (F[i] - 0.3) / 0.35; t = t < 0 ? 0 : t > 1 ? 1 : t; t = t * t * (3 - 2 * t);
+    d[i * 4] = 251 + (27 - 251) * t; d[i * 4 + 1] = 248 + (26 - 248) * t; d[i * 4 + 2] = 241 + (23 - 241) * t; d[i * 4 + 3] = 255;
+  }
+  cx.putImageData(id, 0, 0);
+  S.artCv = c;
+  draw();
+}
+function draw() {
+  if (!S.photo) return;
+  const src = S.view === 'orig' ? S.photo : S.view === 'rect' ? S.rectCv : S.artCv;
+  if (!src) return;
+  if (view.width !== src.width || view.height !== src.height) { view.width = src.width; view.height = src.height; }
+  vctx.drawImage(src, 0, 0);
+  ov.setAttribute('viewBox', '0 0 ' + view.width + ' ' + view.height);
+  ov.innerHTML = '';
+  if (S.view !== 'orig' && S.R) {
+    S.objects.forEach((o, i) => {
+      const c = S.R.fwd(o.sx, o.sy), rx = o.r * S.R.ow, ry = rx * 1.25, on = i === S.sel;
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      el.setAttribute('cx', c[0]); el.setAttribute('cy', c[1]); el.setAttribute('rx', rx); el.setAttribute('ry', ry);
+      el.setAttribute('fill', on ? 'rgba(217,168,46,0.10)' : 'none');
+      el.setAttribute('stroke', on ? '#f0c75e' : '#d9a82e');
+      el.setAttribute('stroke-width', on ? 3 : 2); el.setAttribute('stroke-dasharray', '10 7');
+      ov.appendChild(el);
+    });
+  }
+  $('cv').style.width = (S.zoom * 100) + '%';
+}
+function chips() {
+  const box = $('chips'); box.innerHTML = '';
+  if (!S.objects.length) { const p = document.createElement('span'); p.className = 'hint'; p.textContent = 'Noch kein Objekt markiert.'; box.appendChild(p); }
+  S.objects.forEach((o, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = 'Objekt ' + (i + 1);
+    b.setAttribute('aria-pressed', i === S.sel); b.onclick = () => { S.sel = i; syncSliders(); chips(); draw(); };
+    box.appendChild(b);
+  });
+  $('rm').disabled = S.sel < 0; $('sr').disabled = S.sel < 0;
+  $('place').setAttribute('aria-pressed', S.placing);
+  $('cv').classList.toggle('placing', S.placing);
+}
+function syncSliders() {
+  $('sa').value = S.a; $('sc').value = S.cn;
+  $('sa-o').textContent = (S.a * 100).toFixed(1) + ' %'; $('sc-o').textContent = S.cn.toFixed(2);
+  $('se-o').textContent = Math.round(+$('se').value * 100) + ' %'; $('sd-o').textContent = Math.round(+$('sd').value * 100) + ' %'; $('sl-o').textContent = (+$('sl').value).toFixed(2); $('ss-o').textContent = $('ss').value + ' ×';
+  $('sf-o').textContent = $('sf').value + ' %'; $('so-o').textContent = Math.round(+$('so').value * 100) + ' %'; $('sh-o').textContent = $('sh').value + ' %';
+  if (S.sel >= 0) { $('sr').value = S.objects[S.sel].r; $('sr-o').textContent = Math.round(S.objects[S.sel].r * 100) + ' %'; } else $('sr-o').textContent = '';
+}
+async function runAll() {
+  if (S.busy) { S.queued = 'all'; return; }
+  S.busy = true;
+  try {
+    const t0 = performance.now();
+    rectStage(); await tick();
+    await archStage();
+    await objStage();
+    compose(); chips(); syncSliders();
+    status('Fertig in ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s · ' + S.R.ow + ' × ' + S.R.oh + ' px');
+  } catch (e) { status('Fehler: ' + e.message); }
+  S.busy = false;
+  if (S.queued) { S.queued = null; runAll(); }
+}
+async function runArt() {  /* nur Zeichnung und Objekte neu, Entzerrung bleibt */
+  if (S.busy) { S.queued = 'all'; return; }
+  S.busy = true;
+  try { const t0 = performance.now(); await archStage(); await objStage(); compose(); status('Fertig in ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s'); }
+  catch (e) { status('Fehler: ' + e.message); }
+  S.busy = false;
+  if (S.queued) { S.queued = null; runAll(); }
+}
+/* ---------- Bedienung ---------- */
+async function loadFile(f) {
+  try {
+    const url = URL.createObjectURL(f);
+    const im = await loadSource(url);
+    await setPhoto(im); URL.revokeObjectURL(url);
+  } catch (e) { status('Fehler: ' + e.message); }
+}
+$('file').addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+$('res').onchange = () => { toast('Gilt für das nächste Foto. Für dieses Beispiel erneut laden.'); };
+document.querySelectorAll('.tabs [data-view]').forEach(b => b.onclick = () => {
+  S.view = b.dataset.view;
+  document.querySelectorAll('.tabs [data-view]').forEach(x => x.setAttribute('aria-selected', x === b));
+  draw();
+});
+$('zin').onclick = () => { S.zoom = Math.min(4, S.zoom + 0.5); draw(); };
+$('zout').onclick = () => { S.zoom = Math.max(1, S.zoom - 0.5); draw(); };
+
+['sa', 'sc'].forEach(id => $(id).addEventListener('input', () => {
+  S.a = +$('sa').value; S.cn = +$('sc').value;
+  $('sa-o').textContent = (S.a * 100).toFixed(1) + ' %'; $('sc-o').textContent = S.cn.toFixed(2);
+}));
+['sa', 'sc'].forEach(id => $(id).addEventListener('change', () => { if (S.photo) runAll(); }));
+$('auto').onclick = async () => { if (!S.photo) return; status('Suche Senkrechte …', true); await tick(); const e = estimateVertical(S.photo); S.a = e.a; S.cn = e.cn; syncSliders(); runAll(); };
+['se', 'sl', 'sd', 'ss', 'sf', 'so', 'sh'].forEach(id => $(id).addEventListener('input', syncSliders));
+$('ss').addEventListener('change', () => { if (S.photo) runArt(); });
+$('sd').addEventListener('change', () => { if (S.photo) runArt(); });
+let lt = 0;
+['se', 'sl'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(lt); lt = setTimeout(() => { if (S.archStr && !S.busy) { archBinary(); compose(); } }, 120); }));
+['so', 'sh', 'sf'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(lt); lt = setTimeout(() => { if (S.R && !S.busy) compose(); }, 120); }));
+$('sr').addEventListener('input', () => {
+  if (S.sel < 0) return;
+  S.objects[S.sel].r = +$('sr').value; $('sr-o').textContent = Math.round(+$('sr').value * 100) + ' %';
+  if (S.R && !S.busy) { clearTimeout(S.rt); S.rt = setTimeout(compose, 60); }
+});
+$('place').onclick = () => {
+  if (!S.photo) return toast('Zuerst ein Foto laden.');
+  S.placing = !S.placing;
+  if (S.placing && S.view === 'orig') { S.view = 'art'; document.querySelectorAll('.tabs [data-view]').forEach(x => x.setAttribute('aria-selected', x.dataset.view === 'art')); draw(); }
+  chips(); if (S.placing) toast('Tippe auf die Mitte des Objekts.');
+};
+$('rm').onclick = () => { if (S.sel < 0) return; S.objects.splice(S.sel, 1); S.sel = S.objects.length - 1; syncSliders(); chips(); compose(); };
+$('cv').addEventListener('click', e => {
+  if (!S.R || S.view === 'orig') return;
+  const r = view.getBoundingClientRect(), x = (e.clientX - r.left) * view.width / r.width, y = (e.clientY - r.top) * view.height / r.height;
+  if (S.placing) {
+    const p = S.R.inv(x, y);
+    S.objects.push({ sx: p[0], sy: p[1], r: 0.17 }); S.sel = S.objects.length - 1; S.placing = false;
+    syncSliders(); chips(); if (!S.busy) compose();
+  } else {
+    let hit = -1;
+    S.objects.forEach((o, i) => { const c = S.R.fwd(o.sx, o.sy), rx = o.r * S.R.ow, ry = rx * 1.25; if (((x - c[0]) / rx) ** 2 + ((y - c[1]) / ry) ** 2 <= 1) hit = i; });
+    if (hit >= 0) { S.sel = hit; syncSliders(); chips(); draw(); }
+  }
+});
+
+/* Ausgabe */
+$('mkpng').onclick = () => {
+  if (!S.artCv) return toast('Zuerst ein Foto laden.');
+  S.artCv.toBlob(b => {
+    const url = URL.createObjectURL(b), box = $('outbox');
+    box.innerHTML = ''; const im = document.createElement('img'); im.src = url; im.alt = 'Strichzeichnung'; box.appendChild(im);
+    toast('Bild lange drücken, um es zu sichern.');
+  }, 'image/png');
+};
+$('mksvg').onclick = async () => {
+  if (!S.field) return toast('Zuerst ein Foto laden.');
+  status('SVG wird berechnet …', true); await tick();
+  const w = S.R.ow, h = S.R.oh, f = Float32Array.from(S.field);
+  for (let x = 0; x < w; x++) { f[x] = 0; f[(h - 1) * w + x] = 0; }
+  for (let y = 0; y < h; y++) { f[y * w] = 0; f[y * w + w - 1] = 0; }
+  const loops = contours(f, w, h, 0.45); let parts = [], pts = 0;
+  for (const l of loops) {
+    const s = simplify(l, 0.35); if (s.length < 4) continue;
+    pts += s.length;
+    parts.push('M' + s.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('L') + 'Z');
+  }
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '"><rect width="100%" height="100%" fill="#fbf8f1"/><path d="' + parts.join('') + '" fill="#1b1a17" fill-rule="evenodd"/></svg>';
+  const box = $('outbox'); box.innerHTML = '';
+  const prev = document.createElement('img'); prev.alt = 'SVG-Vorschau';
+  prev.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); box.appendChild(prev);
+  const ta = document.createElement('textarea'); ta.readOnly = true; ta.value = svg; ta.setAttribute('aria-label', 'SVG-Quelltext'); box.appendChild(ta);
+  const cp = document.createElement('button'); cp.type = 'button'; cp.textContent = 'SVG kopieren';
+  cp.onclick = async () => { try { await navigator.clipboard.writeText(svg); toast('SVG kopiert.'); } catch (e) { ta.focus(); ta.select(); toast('Text markiert, bitte manuell kopieren.'); } };
+  box.appendChild(cp);
+  status('SVG: ' + parts.length + ' Konturen, ' + pts + ' Punkte, ' + Math.round(svg.length / 1024) + ' KB');
+};
+
+syncSliders(); chips();
+
+</script>
+</body>
+</html>
