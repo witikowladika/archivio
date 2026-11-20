@@ -147,7 +147,7 @@ footer { font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; colo
   <details id="d-art" open>
     <summary>Zeichnung</summary>
     <div class="ctl">
-      <div class="row"><label for="se">Linienmenge <output id="se-o"></output></label><input id="se" type="range" min="0.05" max="1" step="0.05" value="0.85"><small>Nach rechts mehr Linien an der Fassade.</small></div>
+      <div class="row"><label for="se">Linienmenge <output id="se-o"></output></label><input id="se" type="range" min="0.05" max="1" step="0.05" value="0.95"><small>Nach rechts mehr Linien an der Fassade.</small></div>
       <div class="row"><label for="sd">Feinheit <output id="sd-o"></output></label><input id="sd" type="range" min="0" max="1" step="0.1" value="0.8"><small>Nach rechts feinere, mehr Details (braucht ein paar Sekunden).</small></div>
       <div class="row"><label for="sl">Linienstärke <output id="sl-o"></output></label><input id="sl" type="range" min="0.5" max="3" step="0.25" value="1"></div>
       <div class="row"><label for="ss">Putz glätten <output id="ss-o"></output></label><input id="ss" type="range" min="0" max="3" step="1" value="2"></div>
@@ -164,7 +164,7 @@ footer { font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; colo
       </div>
       <div class="chips" id="chips"></div>
       <div class="row"><label for="sr">Größe des Bereichs <output id="sr-o"></output></label><input id="sr" type="range" min="0.05" max="0.5" step="0.005" value="0.17"></div>
-      <div class="row"><label for="so">Detailgrad der Skulptur <output id="so-o"></output></label><input id="so" type="range" min="0.1" max="0.8" step="0.05" value="0.65"><small>Nach rechts mehr feine Linien.</small></div>
+      <div class="row"><label for="so">Detailgrad der Skulptur <output id="so-o"></output></label><input id="so" type="range" min="0.1" max="0.8" step="0.05" value="0.75"><small>Nach rechts mehr feine Linien.</small></div>
       <div class="row"><label for="sh">Schraffur in dunklen Stellen <output id="sh-o"></output></label><input id="sh" type="range" min="0" max="100" step="5" value="10"></div>
     </div>
   </details>
@@ -619,7 +619,7 @@ async function nnEdges(w, h) {
     ort.env.wasm.wasmPaths = new URL('ort/', location.href).href; ort.env.wasm.numThreads = 1; ort.env.wasm.proxy = false;
     nnSession = await ort.InferenceSession.create('model/pidinet.onnx', { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
   }
-  const L = 1100, sc = Math.min(1, L / Math.max(w, h));
+  const L = 1400, sc = Math.min(1, L / Math.max(w, h));
   const iw = Math.max(8, Math.floor(w * sc / 8) * 8), ih = Math.max(8, Math.floor(h * sc / 8) * 8);
   const c = document.createElement('canvas'); c.width = iw; c.height = ih;
   const cx = c.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(S.rectCv, 0, 0, iw, ih);
@@ -662,7 +662,12 @@ function archBinary() {
   const thi = S.nnUsed ? 0.95 - 0.55 * q : quantile(S.archStr, null, q), tlo = S.nnUsed ? Math.max(0.16, thi * 0.55) : thi * (0.4 - 0.15 * (+$('sd').value));
   const b = hyst(S.archStr, w, h, thi, tlo, null);
   const fi = +$('sd').value;
-  if (S.nnUsed) { thin(b, w, h); cleanBin(b, w, h, 10 * f, 14 * f); S.archR = dilate(b, w, h, Math.max(0, Math.round((+$('sl').value - 0.75) * f))); return; }
+  if (S.nnUsed) {
+    const eb = blur(S.archStr, w, h, 2.5 * f), e = new Float32Array(w * h), lo = 0.30 - 0.26 * q, hi = lo + 0.22, soft = new Float32Array(w * h);
+    for (let i = 0; i < e.length; i++) e[i] = S.archStr[i] - 0.75 * eb[i];
+    for (let i = 0; i < soft.length; i++) { const v = (e[i] - lo) / (hi - lo); soft[i] = v < 0 ? 0 : v > 1 ? 1 : v; }
+    S.archR = soft; return;
+  }
   cleanBin(b, w, h, (22 - 14 * fi) * f, (18 - 10 * fi) * f);
   S.archR = dilate(b, w, h, r);
 }
@@ -712,12 +717,12 @@ function compose() {
     const mk = blur(mask, w, h, 0.017 * w), region = new Uint8Array(w * h);
     for (let i = 0; i < region.length; i++) region[i] = (mk[i] > 0.04 && S.valid[i]) ? 1 : 0;
     const thi = S.nnUsed ? 0.6 - 0.5 * (+$('so').value) : quantile(S.objStr, region, +$('so').value);
-    const ridge = hyst(S.objStr, w, h, thi, S.nnUsed ? Math.max(0.06, thi * 0.5) : thi * 0.4, region);
-    if (S.nnUsed) thin(ridge, w, h);
-    cleanBin(ridge, w, h, 10 * f, 9 * f);
+    let ridge = hyst(S.objStr, w, h, thi, S.nnUsed ? Math.max(0.06, thi * 0.5) : thi * 0.4, region);
+    if (S.nnUsed) { ridge = new Float32Array(w * h); const lo2 = 0.3 - 0.27 * (+$('so').value), ob = blur(S.objStr, w, h, 1.8 * f); for (let i = 0; i < ridge.length; i++) if (region[i]) { const v = (S.objStr[i] - 0.75 * ob[i] - lo2) / 0.25; ridge[i] = v < 0 ? 0 : v > 1 ? 1 : v; } }
+    if (!S.nnUsed) cleanBin(ridge, w, h, 10 * f, 9 * f);
     const hatch = makeHatch(region, mk, w, h, f, +$('sh').value);
     const lay = new Float32Array(w * h);
-    for (let i = 0; i < lay.length; i++) lay[i] = (ridge[i] || hatch[i]) ? 1 : 0;
+    for (let i = 0; i < lay.length; i++) lay[i] = Math.max(ridge[i], hatch[i] ? 1 : 0);
     const fo = blur(lay, w, h, Math.max(0.6, 0.7 * f));
     field = new Float32Array(w * h);
     for (let i = 0; i < field.length; i++) { const v = fo[i] * 2.4; field[i] = fa[i] * (1 - mk[i]) + (v > 1 ? 1 : v) * mk[i]; }
@@ -790,7 +795,7 @@ async function runAll() {
     await archStage();
     await objStage();
     compose(); chips(); syncSliders();
-    status('Fertig in ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s · ' + S.R.ow + ' × ' + S.R.oh + ' px');
+    status('Fertig in ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s · ' + (S.nnUsed ? 'Netz' : 'Filter') + ' · ' + S.R.ow + ' × ' + S.R.oh + ' px');
   } catch (e) { status('Fehler: ' + e.message); }
   S.busy = false;
   if (S.queued) { S.queued = null; runAll(); }
